@@ -1,22 +1,8 @@
-# Core Libraries
 streamlit
 google-generativeai
+PyPDF2
+SpeechRecognition
+numpy
 sentence-transformers
 scikit-learn
-numpy
-
-# PDF Processing
-PyPDF2
-
-# Audio Processing
-SpeechRecognition
-sounddevice
-soundfile
 gTTS
-
-# Machine Learning and NLP
-transformers
-torch
-
-# Additional Utilities
-python-dotenv
