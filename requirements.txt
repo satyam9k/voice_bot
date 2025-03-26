@@ -1,8 +1,10 @@
 streamlit
 google-generativeai
 PyPDF2
-SpeechRecognition
+speech_recognition
 numpy
 sentence-transformers
 scikit-learn
 gTTS
+pygame
+python-dotenv
