@@ -1,8 +1,0 @@
-google-generativeai
-PyPDF2
-speech_recognition
-numpy
-sentence-transformers
-scikit-learn
-gTTS
-pygame
