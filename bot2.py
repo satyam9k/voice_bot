@@ -23,7 +23,7 @@ def get_base64_of_file(file_path):
     return base64.b64encode(data).decode()
 
 # Configuration for Gemini API
-GEMINI_API_KEY = "AIzaSyB-8BpC4oEsK0LF9Ap_2OTGM9hRLWA4nS4"  # Replace with your actual key
+GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY")
 genai.configure(api_key=GEMINI_API_KEY)
 
 # --- Custom CSS and UI Styling ---
@@ -128,30 +128,23 @@ def animate_sound_wave(duration=None, color="#4CAF50"):
         color (str): Color of the bars
     """
     start_time = time.time()
-    
-    # Initialize or reset animation state
+
     if 'animation_stop' not in st.session_state:
         st.session_state.animation_stop = False
     st.session_state.animation_stop = False
-    
-    # Create a placeholder for the animation
+
     animation_placeholder = st.empty()
     
     def update_animation():
         while not st.session_state.animation_stop:
-            # Check duration if specified
             if duration is not None and time.time() - start_time > duration:
                 st.session_state.animation_stop = True
                 break
-            
-            # Update the animation
             animation_placeholder.markdown(create_sound_wave(color=color), unsafe_allow_html=True)
             time.sleep(0.1)
-        
-        # Clear the placeholder when done
+
         animation_placeholder.empty()
-    
-    # Start the animation thread
+
     animation_thread = threading.Thread(target=update_animation)
     add_script_run_ctx(animation_thread)
     animation_thread.start()
@@ -161,17 +154,13 @@ def animate_sound_wave(duration=None, color="#4CAF50"):
 class VoiceQABot:
     def __init__(self):
         # Placeholder PDF path (modify as needed)
-        self.pdf_path = "D:/Projects/voice_bot/aboutme.pdf"
-        profile_pic_path = "D:/Projects/voice_bot/sk.jpeg"
-        
-        # Try to load profile picture
+        self.pdf_path = "aboutme.pdf"
+        profile_pic_path = "sk.jpeg"
         try:
             self.profile_pic_base64 = get_base64_of_file(profile_pic_path)
             self.profile_pic_html = f'<img src="data:image/jpeg;base64,{self.profile_pic_base64}" class="circular-img" alt="My Picture">'
         except Exception as e:
             self.profile_pic_html = "<p>Profile picture not found.</p>"
-        
-        # Initialize conversation history
         if 'conversation_history' not in st.session_state:
             st.session_state.conversation_history = []
         
@@ -187,7 +176,6 @@ class VoiceQABot:
         # Initialize pygame mixer for audio playback
         pygame.mixer.init()
         
-        # Initialize session state variables
         if 'document_text' not in st.session_state:
             st.session_state.document_text = self.extract_text_from_pdf()
         if 'document_embeddings' not in st.session_state:
@@ -197,18 +185,10 @@ class VoiceQABot:
         """
         Display the custom UI with profile picture and bio
         """
-        # Apply custom styling
         apply_custom_styling()
-        
-        # Create two columns
         left_col, right_col = st.columns([1, 1])
-        
-        # Left column - Profile and Bio
         with left_col:
-            # Display profile picture
             st.markdown(self.profile_pic_html, unsafe_allow_html=True)
-            
-            # Display bio card
             st.markdown(
                 """
                 <div class="bio-card">
@@ -223,15 +203,11 @@ class VoiceQABot:
                 unsafe_allow_html=True
             )
         
-        # Right column - Voice Interaction
         with right_col:
             st.markdown("## Talk to me!")
-            
-            # Voice Input Button
             if st.button("🎤 Ask a Question"):
                 self.handle_voice_interaction()
-            
-            # Conversation History
+
             st.markdown("## Conversation History")
             history_container = st.container()
             with history_container:
@@ -275,7 +251,6 @@ class VoiceQABot:
         """
         st.write("🎤 Speak your question...")
         
-        # Start animation
         animation_thread = animate_sound_wave(color="#4CAF50")
         
         # Use microphone as source
@@ -285,18 +260,15 @@ class VoiceQABot:
             
             try:
                 # Listen for audio input
-                audio = self.recognizer.listen(source, timeout=5)
-                
-                # Stop animation
+                audio = self.recognizer.listen(source, timeout=10)
+
                 st.session_state.animation_stop = True
                 animation_thread.join()
-                
-                # Recognize speech
+
                 query = self.recognizer.recognize_google(audio)
                 
                 return query
             except sr.UnknownValueError:
-                # Speak the error message
                 error_audio = self.text_to_speech("Sorry, I couldn't understand you. Please ask your question again.")
                 self.play_audio(error_audio)
                 
@@ -304,7 +276,6 @@ class VoiceQABot:
                 animation_thread.join()
                 return None
             except sr.RequestError:
-                # Speak the error message
                 error_audio = self.text_to_speech("Could not request results from speech recognition service.")
                 self.play_audio(error_audio)
                 
@@ -312,7 +283,6 @@ class VoiceQABot:
                 animation_thread.join()
                 return None
             except Exception as e:
-                # Speak a generic error message
                 error_audio = self.text_to_speech("An error occurred during speech recognition.")
                 self.play_audio(error_audio)
                 
@@ -325,12 +295,9 @@ class VoiceQABot:
         Extract text from local PDF file
         """
         try:
-            # Check if file exists
             if not os.path.exists(self.pdf_path):
                 st.error(f"PDF file not found at {self.pdf_path}")
                 return ""
-
-            # Open and read PDF
             with open(self.pdf_path, 'rb') as pdf_file:
                 pdf_reader = PyPDF2.PdfReader(pdf_file)
                 text = ""
@@ -345,13 +312,8 @@ class VoiceQABot:
         """
         Create embeddings for document text
         """
-        # Split text into chunks (sentences or paragraphs)
         chunks = text.split('\n')
-        
-        # Remove empty chunks
         chunks = [chunk.strip() for chunk in chunks if chunk.strip()]
-        
-        # Create embeddings
         embeddings = self.embedding_model.encode(chunks)
         
         return chunks, embeddings
@@ -360,13 +322,8 @@ class VoiceQABot:
         """
         Perform semantic search to find most relevant context
         """
-        # Embed the query
         query_embedding = self.embedding_model.encode([query])[0]
-        
-        # Compute cosine similarities
         similarities = cosine_similarity([query_embedding], embeddings)[0]
-        
-        # Get top 3 most similar chunks
         top_indices = np.argsort(similarities)[-3:][::-1]
         relevant_contexts = [chunks[i] for i in top_indices]
         
@@ -376,7 +333,6 @@ class VoiceQABot:
         """
         Generate response using Gemini with retrieved context
         """
-        # Construct prompt with context
         full_prompt = f"""
         Context: {context}
 
@@ -388,8 +344,6 @@ class VoiceQABot:
         If the context doesn't contain specific information,
         give a response like, "Hmm, that's not something I'm familiar with right now, as it's not in my knowledge base. Maybe ask Satyam personally when he's around?"
         """
-
-        # Generate response
         response = self.generation_model.generate_content(full_prompt)
         return response.text
 
@@ -397,10 +351,8 @@ class VoiceQABot:
         """
         Convert text to speech with a male-like voice using gTTS
         """
-        # Create a temporary file
         temp_audio = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3")
-        # Use English (UK) for a slightly more male-sounding voice
-        tts = gTTS(text=text, lang='en', tld='com.au')
+        tts = gTTS(text=text, lang='en', tld='co.uk')
         tts.save(temp_audio.name)
         return temp_audio.name
 
@@ -409,22 +361,16 @@ class VoiceQABot:
         Play audio file directly
         """
         try:
-            # Start animation
             animation_thread = animate_sound_wave(color="#FF5733")
-            
-            # Load and play the audio
             pygame.mixer.music.load(audio_file)
             pygame.mixer.music.play()
-            
-            # Wait for playback to finish
+
             while pygame.mixer.music.get_busy():
                 pygame.time.Clock().tick(10)
-            
-            # Stop animation
+
             st.session_state.animation_stop = True
             animation_thread.join()
-            
-            # Clean up the audio file
+
             pygame.mixer.music.unload()
             os.unlink(audio_file)
         except Exception as e:
@@ -434,7 +380,6 @@ class VoiceQABot:
         """
         Main Streamlit application
         """
-        # Display custom UI
         self.display_ui()
 
 def main():
