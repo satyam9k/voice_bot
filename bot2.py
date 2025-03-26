@@ -8,19 +8,23 @@ from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 from gtts import gTTS
 import tempfile
-import pygame
 import time
 import threading
 import base64
-from queue import Queue, Empty
-from streamlit.runtime.scriptrunner import add_script_run_ctx
+import io
+import soundfile as sf
+import sounddevice as sd
 
 # --- Utility: Load image and convert to base64 ---
 @st.cache_data
 def get_base64_of_file(file_path):
-    with open(file_path, "rb") as f:
-        data = f.read()
-    return base64.b64encode(data).decode()
+    try:
+        with open(file_path, "rb") as f:
+            data = f.read()
+        return base64.b64encode(data).decode()
+    except Exception as e:
+        st.error(f"Error loading file {file_path}: {e}")
+        return ""
 
 # Configuration for Gemini API
 GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY")
@@ -146,7 +150,6 @@ def animate_sound_wave(duration=None, color="#4CAF50"):
         animation_placeholder.empty()
 
     animation_thread = threading.Thread(target=update_animation)
-    add_script_run_ctx(animation_thread)
     animation_thread.start()
     
     return animation_thread
@@ -161,6 +164,7 @@ class VoiceQABot:
             self.profile_pic_html = f'<img src="data:image/jpeg;base64,{self.profile_pic_base64}" class="circular-img" alt="My Picture">'
         except Exception as e:
             self.profile_pic_html = "<p>Profile picture not found.</p>"
+        
         if 'conversation_history' not in st.session_state:
             st.session_state.conversation_history = []
         
@@ -169,12 +173,6 @@ class VoiceQABot:
         
         # Initialize Gemini model
         self.generation_model = genai.GenerativeModel('gemini-2.0-flash')
-        
-        # Initialize speech recognizer
-        self.recognizer = sr.Recognizer()
-        
-        # Initialize pygame mixer for audio playback
-        pygame.mixer.init()
         
         if 'document_text' not in st.session_state:
             st.session_state.document_text = self.extract_text_from_pdf()
@@ -247,48 +245,57 @@ class VoiceQABot:
 
     def voice_input(self):
         """
-        Capture voice input from user
+        Capture voice input from user using Streamlit Cloud compatible method
         """
-        st.write("🎤 Speak your question...")
+        st.write("🎤 Click 'Record' and speak your question...")
         
-        animation_thread = animate_sound_wave(color="#4CAF50")
+        # Create audio recording interface
+        recorded_audio = st.file_uploader("Upload audio or click 'Record'", type=['wav'])
         
-        # Use microphone as source
-        with sr.Microphone() as source:
-            # Adjust for ambient noise
-            self.recognizer.adjust_for_ambient_noise(source, duration=1)
+        # Add recording button
+        is_recording = st.checkbox("Record Audio")
+        
+        if is_recording:
+            # Capture audio in chunks
+            st.write("Recording... Speak now.")
+            duration = 5  # seconds
+            sample_rate = 44100
             
+            # Use sound device for recording
+            recording = sd.rec(int(duration * sample_rate), samplerate=sample_rate, channels=1)
+            sd.wait()
+            
+            # Convert to wav file
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_wav:
+                sf.write(temp_wav.name, recording, sample_rate)
+            
+            # Load the recorded audio
+            with open(temp_wav.name, 'rb') as f:
+                recorded_audio = f
+            
+            # Remove temporary file
+            os.unlink(temp_wav.name)
+        
+        # Process the audio file if available
+        if recorded_audio is not None:
             try:
-                # Listen for audio input
-                audio = self.recognizer.listen(source, timeout=10)
-
-                st.session_state.animation_stop = True
-                animation_thread.join()
-
-                query = self.recognizer.recognize_google(audio)
-                
+                # Use speech recognition to transcribe
+                r = sr.Recognizer()
+                with sr.AudioFile(recorded_audio) as source:
+                    audio = r.record(source)
+                query = r.recognize_google(audio)
                 return query
             except sr.UnknownValueError:
-                error_audio = self.text_to_speech("Sorry, I couldn't understand you. Please ask your question again.")
-                self.play_audio(error_audio)
-                
-                st.session_state.animation_stop = True
-                animation_thread.join()
+                st.error("Sorry, I couldn't understand the audio. Please try again.")
                 return None
             except sr.RequestError:
-                error_audio = self.text_to_speech("Could not request results from speech recognition service.")
-                self.play_audio(error_audio)
-                
-                st.session_state.animation_stop = True
-                animation_thread.join()
+                st.error("Could not request results from speech recognition service.")
                 return None
             except Exception as e:
-                error_audio = self.text_to_speech("An error occurred during speech recognition.")
-                self.play_audio(error_audio)
-                
-                st.session_state.animation_stop = True
-                animation_thread.join()
+                st.error(f"An error occurred: {e}")
                 return None
+        
+        return None
 
     def extract_text_from_pdf(self):
         """
@@ -358,20 +365,14 @@ class VoiceQABot:
 
     def play_audio(self, audio_file):
         """
-        Play audio file directly
+        Play audio file using Streamlit audio widget
         """
         try:
-            animation_thread = animate_sound_wave(color="#FF5733")
-            pygame.mixer.music.load(audio_file)
-            pygame.mixer.music.play()
-
-            while pygame.mixer.music.get_busy():
-                pygame.time.Clock().tick(10)
-
-            st.session_state.animation_stop = True
-            animation_thread.join()
-
-            pygame.mixer.music.unload()
+            with open(audio_file, 'rb') as f:
+                audio_bytes = f.read()
+            st.audio(audio_bytes, format='audio/mp3')
+            
+            # Clean up the temporary audio file
             os.unlink(audio_file)
         except Exception as e:
             st.error(f"Error playing audio: {e}")
