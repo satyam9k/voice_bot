@@ -2,21 +2,16 @@ import os
 import streamlit as st
 import google.generativeai as genai
 import PyPDF2
-import speech_recognition as sr
 import numpy as np
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 from gtts import gTTS
 import tempfile
-import pygame
-import time
-import threading
 import base64
-from queue import Queue, Empty
-from streamlit.runtime.scriptrunner import add_script_run_ctx
-from dotenv import load_dotenv 
+import audio_recorder_streamlit as audio_recorder
 
 # Load environment variables from .env file
+from dotenv import load_dotenv 
 load_dotenv()
 
 # --- Utility: Load image and convert to base64 ---
@@ -91,15 +86,15 @@ def apply_custom_styling():
     }
     
     .conversation-history {
-    background-color: #f9f9f9;
-    border: 1px solid #e0e0e0;
-    border-radius: 10px;
-    padding: 15px;
-    max-height: 300px;  
-    overflow-y: auto;  
-    width: 100%;  
-    box-sizing: border-box;  
-}
+        background-color: #f9f9f9;
+        border: 1px solid #e0e0e0;
+        border-radius: 10px;
+        padding: 15px;
+        max-height: 300px;  
+        overflow-y: auto;  
+        width: 100%;  
+        box-sizing: border-box;  
+    }
     
     /* Ensure all headers are visible */
     h1, h2, h3, h4, h5, h6 {
@@ -108,70 +103,11 @@ def apply_custom_styling():
     </style>
     """, unsafe_allow_html=True)
 
-# --- Sound Wave Animation Functions ---
-def create_sound_wave(num_bars=20, max_height=50, color="#4CAF50"):
-    """
-    Generate a single state of sound wave animation
-    
-    Args:
-        num_bars (int): Number of bars in the wave
-        max_height (int): Maximum height of bars
-        color (str): Color of the bars
-    
-    Returns:
-        str: HTML representation of the sound wave
-    """
-    heights = [int(max_height * (0.5 + 0.5 * np.sin(i + time.time() * 5))) for i in np.linspace(0, 2 * np.pi, num_bars)]
-    bars = "".join([
-        f'<div style="display: inline-block; width: 5px; height: {height}px; margin: 0 2px; background-color: {color}; transition: height 0.1s ease;"></div>' 
-        for height in heights
-    ])
-    return f'<div style="display: flex; justify-content: center; align-items: center; height: 60px;">{bars}</div>'
-
-def animate_sound_wave(duration=None, color="#4CAF50"):
-    """
-    Animate sound wave using Streamlit's session state
-    
-    Args:
-        duration (float, optional): Duration to animate
-        color (str): Color of the bars
-    """
-    start_time = time.time()
-    
-    # Initialize or reset animation state
-    if 'animation_stop' not in st.session_state:
-        st.session_state.animation_stop = False
-    st.session_state.animation_stop = False
-    
-    # Create a placeholder for the animation
-    animation_placeholder = st.empty()
-    
-    def update_animation():
-        while not st.session_state.animation_stop:
-            # Check duration if specified
-            if duration is not None and time.time() - start_time > duration:
-                st.session_state.animation_stop = True
-                break
-            
-            # Update the animation
-            animation_placeholder.markdown(create_sound_wave(color=color), unsafe_allow_html=True)
-            time.sleep(0.1)
-        
-        # Clear the placeholder when done
-        animation_placeholder.empty()
-    
-    # Start the animation thread
-    animation_thread = threading.Thread(target=update_animation)
-    add_script_run_ctx(animation_thread)
-    animation_thread.start()
-    
-    return animation_thread
-
 class VoiceQABot:
     def __init__(self):
         # Placeholder PDF path (modify as needed)
-        self.pdf_path = "D:/Projects/voice_bot/about_me.pdf"
-        profile_pic_path = "D:/Projects/voice_bot/sk.jpeg"
+        self.pdf_path = "about_me.pdf"
+        profile_pic_path = "sk.jpeg"
         
         # Try to load profile picture
         try:
@@ -188,13 +124,7 @@ class VoiceQABot:
         self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
         
         # Initialize Gemini model
-        self.generation_model = genai.GenerativeModel('gemini-2.0-flash')
-        
-        # Initialize speech recognizer
-        self.recognizer = sr.Recognizer()
-        
-        # Initialize pygame mixer for audio playback
-        pygame.mixer.init()
+        self.generation_model = genai.GenerativeModel('gemini-pro')
         
         # Initialize session state variables
         if 'document_text' not in st.session_state:
@@ -236,9 +166,18 @@ class VoiceQABot:
         with right_col:
             st.markdown("## Talk to me!")
             
-            # Voice Input Button
-            if st.button("🎤 Ask a Question"):
-                self.handle_voice_interaction()
+            # Voice Input using audio-recorder-streamlit
+            audio_bytes = audio_recorder.audio_recorder(
+                text="Click to record",
+                recording_color="#e8b62c",
+                neutral_color="#cacaca",
+                icon_name="microphone",
+                icon_size="2x"
+            )
+            
+            # Process audio if recorded
+            if audio_bytes:
+                self.handle_audio_input(audio_bytes)
             
             # Conversation History
             st.markdown("## Conversation History")
@@ -251,84 +190,57 @@ class VoiceQABot:
                     st.markdown("---")
                 st.markdown('</div>', unsafe_allow_html=True)
 
-    def handle_voice_interaction(self):
+    def handle_audio_input(self, audio_bytes):
         """
-        Handle the entire voice interaction process
+        Handle the audio input processing
         """
-        # Capture voice input
-        query = self.voice_input()
-        
-        if query:
-            # Retrieve relevant context
-            chunks, embeddings = st.session_state.document_embeddings
-            context = self.retrieve_relevant_context(query, chunks, embeddings)
+        try:
+            # Save audio to temporary file
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_audio:
+                temp_audio.write(audio_bytes)
+                temp_audio_path = temp_audio.name
 
-            # Generate response
-            response = self.generate_response(query, context)
-
-            # Add to conversation history
-            st.session_state.conversation_history.append({
-                'query': query,
-                'response': response
-            })
-
-            # Generate and play audio response
-            try:
-                audio_file = self.text_to_speech(response)
-                self.play_audio(audio_file)
-            except Exception as e:
-                st.error(f"Error generating or playing audio: {e}")
-
-    def voice_input(self):
-        """
-        Capture voice input from user
-        """
-        st.write("🎤 Speak your question...")
-        
-        # Start animation
-        animation_thread = animate_sound_wave(color="#4CAF50")
-        
-        # Use microphone as source
-        with sr.Microphone() as source:
-            # Adjust for ambient noise
-            self.recognizer.adjust_for_ambient_noise(source, duration=1)
+            # Use speech recognition to transcribe
+            import speech_recognition as sr
+            recognizer = sr.Recognizer()
             
-            try:
-                # Listen for audio input
-                audio = self.recognizer.listen(source, timeout=5)
+            with sr.AudioFile(temp_audio_path) as source:
+                audio = recognizer.record(source)
+                query = recognizer.recognize_google(audio)
+
+            # Remove temporary audio file
+            os.unlink(temp_audio_path)
+
+            if query:
+                # Retrieve relevant context
+                chunks, embeddings = st.session_state.document_embeddings
+                context = self.retrieve_relevant_context(query, chunks, embeddings)
+
+                # Generate response
+                response = self.generate_response(query, context)
+
+                # Add to conversation history
+                st.session_state.conversation_history.append({
+                    'query': query,
+                    'response': response
+                })
+
+                # Generate audio response
+                audio_file = self.text_to_speech(response)
                 
-                # Stop animation
-                st.session_state.animation_stop = True
-                animation_thread.join()
+                # Play audio (display download link for Streamlit Cloud)
+                with open(audio_file, 'rb') as audio_file_obj:
+                    st.audio(audio_file_obj, format='audio/mp3')
                 
-                # Recognize speech
-                query = self.recognizer.recognize_google(audio)
-                
-                return query
-            except sr.UnknownValueError:
-                # Speak the error message
-                error_audio = self.text_to_speech("Sorry, I couldn't understand you. Please ask your question again.")
-                self.play_audio(error_audio)
-                
-                st.session_state.animation_stop = True
-                animation_thread.join()
-                return None
-            except sr.RequestError:
-                # Speak the error message
-                error_audio = self.text_to_speech("Could not request results from speech recognition service.")
-                self.play_audio(error_audio)
-                
-                st.session_state.animation_stop = True
-                animation_thread.join()
-                return None
-            except Exception as e:
-                # Speak a generic error message
-                error_audio = self.text_to_speech("An error occurred during speech recognition.")
-                self.play_audio(error_audio)
-                
-                st.session_state.animation_stop = True
-                animation_thread.join()
-                return None
+                # Clean up the audio file
+                os.unlink(audio_file)
+
+        except sr.UnknownValueError:
+            st.error("Sorry, I couldn't understand the audio. Please try again.")
+        except sr.RequestError:
+            st.error("Could not request results from speech recognition service.")
+        except Exception as e:
+            st.error(f"An error occurred: {e}")
 
     def extract_text_from_pdf(self):
         """
@@ -413,32 +325,6 @@ class VoiceQABot:
         tts = gTTS(text=text, lang='en', tld='co.za')
         tts.save(temp_audio.name)
         return temp_audio.name
-
-    def play_audio(self, audio_file):
-        """
-        Play audio file directly
-        """
-        try:
-            # Start animation
-            animation_thread = animate_sound_wave(color="#FF5733")
-            
-            # Load and play the audio
-            pygame.mixer.music.load(audio_file)
-            pygame.mixer.music.play()
-            
-            # Wait for playback to finish
-            while pygame.mixer.music.get_busy():
-                pygame.time.Clock().tick(10)
-            
-            # Stop animation
-            st.session_state.animation_stop = True
-            animation_thread.join()
-            
-            # Clean up the audio file
-            pygame.mixer.music.unload()
-            os.unlink(audio_file)
-        except Exception as e:
-            st.error(f"Error playing audio: {e}")
 
     def run(self):
         """
