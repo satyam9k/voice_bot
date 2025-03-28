@@ -176,7 +176,17 @@ def apply_custom_styling():
     .soundwave-bar:nth-child(5) { animation-delay: 0s; } /* Symmetric delay */
     </style>
     """, unsafe_allow_html=True)
-
+st.markdown(
+    """
+    <style>
+        div[data-testid="stAudio"] {
+            background-color: transparent !important;  /* Removes dark background */
+            border-radius: 10px;  /* Optional: Smooth edges */
+        }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
 def get_soundwave_html(label="Processing..."):
     """Generate HTML for soundwave animation with a label"""
     return f"""
@@ -292,25 +302,15 @@ class VoiceQABot:
 
             # Voice Input
             if audio_recorder:
+            
                 audio_bytes = audio_recorder(
-                    recording_color="#FF4B4B",  # Red when recording
-                    neutral_color="#4CAF50",   # Green when idle
+                    recording_color="#FF4B4B", # Red when recording
+                    neutral_color="#4CAF50",  # Green when idle
                     icon_name="microphone",
                     icon_size="2x",
-                    pause_threshold=2.0,  # Seconds of silence before stopping
-                    sample_rate=16000,  # Common sample rate
-                    background_color="#333333"
+                    pause_threshold=2.0, # Seconds of silence before stopping
+                    sample_rate=16000 # Common sample rate
                 )
-
-                # audio_bytes = audio_recorder(
-                #     #text="Click to Speak",
-                #     recording_color="#FF4B4B", # Red when recording
-                #     neutral_color="#4CAF50",  # Green when idle
-                #     icon_name="microphone",
-                #     icon_size="2x",
-                #     pause_threshold=2.0, # Seconds of silence before stopping
-                #     sample_rate=16000 # Common sample rate
-                # )
 
                 # Process audio if recorded
                 if audio_bytes:
