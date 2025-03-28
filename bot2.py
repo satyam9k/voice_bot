@@ -124,7 +124,7 @@ class VoiceQABot:
         self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
         
         # Initialize Gemini model
-        self.generation_model = genai.GenerativeModel('gemini-pro')
+        self.generation_model = genai.GenerativeModel('gemini-2.0-flash')
         
         # Initialize session state variables
         if 'document_text' not in st.session_state:
