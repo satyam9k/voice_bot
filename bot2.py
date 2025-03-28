@@ -292,9 +292,9 @@ class VoiceQABot:
         """Display the custom UI with profile and interaction components"""
         apply_custom_styling()
 
-        st.markdown("<h1 style='color: #FF5733;'>AI Voice Assistant</h1>",
-                    unsafe_allow_html=True)
-        st.markdown("---")
+        # st.markdown("<h1 style='color: #FF5733;'>AI Voice Assistant</h1>",
+        #             unsafe_allow_html=True)
+        # st.markdown("---")
 
         # Create two columns
         left_col, right_col = st.columns([1, 1.2]) # Give right col slightly more space
