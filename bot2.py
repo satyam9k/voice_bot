@@ -106,7 +106,7 @@ def apply_custom_styling():
 class VoiceQABot:
     def __init__(self):
         # Placeholder PDF path (modify as needed)
-        self.pdf_path = "about_me.pdf"
+        self.pdf_path = "aboutme.pdf"
         profile_pic_path = "sk.jpeg"
         
         # Try to load profile picture
