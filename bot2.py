@@ -250,7 +250,7 @@ class VoiceQABot:
         # Initialize models
         try:
             self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
-            self.generation_model = genai.GenerativeModel('gemini-1.5-flash')
+            self.generation_model = genai.GenerativeModel('gemini-2.0-flash')
         except Exception as e:
             st.error(f"Error initializing AI models: {e}")
             st.stop()
@@ -395,7 +395,7 @@ class VoiceQABot:
 
             # Use recognize_google - ensure internet connection
             query = recognizer.recognize_google(audio)
-            st.write(f"Heard: {query}") # Keep for debugging, or comment out
+            #st.write(f"Heard: {query}") # Keep for debugging, or comment out
 
             if not query:
                 raise ValueError("Transcription resulted in empty text.")
