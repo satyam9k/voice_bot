@@ -293,14 +293,24 @@ class VoiceQABot:
             # Voice Input
             if audio_recorder:
                 audio_bytes = audio_recorder(
-                    text="Click to Speak",
-                    recording_color="#FF4B4B", # Red when recording
-                    neutral_color="#4CAF50",  # Green when idle
+                    recording_color="#FF4B4B",  # Red when recording
+                    neutral_color="#4CAF50",   # Green when idle
                     icon_name="microphone",
                     icon_size="2x",
-                    pause_threshold=2.0, # Seconds of silence before stopping
-                    sample_rate=16000 # Common sample rate
+                    pause_threshold=2.0,  # Seconds of silence before stopping
+                    sample_rate=16000,  # Common sample rate
+                    background_color="#333333"
                 )
+
+                # audio_bytes = audio_recorder(
+                #     #text="Click to Speak",
+                #     recording_color="#FF4B4B", # Red when recording
+                #     neutral_color="#4CAF50",  # Green when idle
+                #     icon_name="microphone",
+                #     icon_size="2x",
+                #     pause_threshold=2.0, # Seconds of silence before stopping
+                #     sample_rate=16000 # Common sample rate
+                # )
 
                 # Process audio if recorded
                 if audio_bytes:
