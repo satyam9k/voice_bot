@@ -350,6 +350,7 @@ from gtts import gTTS
 import tempfile
 import base64
 import speech_recognition as sr
+import time
 
 # Avoid import issues
 try:
@@ -395,11 +396,13 @@ def apply_custom_styling():
     st.markdown("""
     <style>
     .stApp {
-        background-color: #ffffff;
+        background: linear-gradient(135deg, #e0f2f1, #fff3e0);
+        background-attachment: fixed;
     }
     
     body, .stMarkdown, .stText {
         color: #000000 !important;
+        font-family: 'Roboto', sans-serif;
     }
     
     .stButton>button {
@@ -427,7 +430,7 @@ def apply_custom_styling():
     }
     
     .bio-card {
-        background-color: #f4f4f4;
+        background-color: rgba(255,255,255,0.8);
         padding: 20px;
         border-radius: 10px;
         box-shadow: 0 4px 6px rgba(0,0,0,0.1);
@@ -436,17 +439,57 @@ def apply_custom_styling():
     }
     
     .conversation-history {
-        background-color: #f9f9f9;
+        background-color: rgba(255,255,255,0.7);
         border: 1px solid #e0e0e0;
         border-radius: 10px;
         padding: 15px;
         max-height: 300px;  
         overflow-y: auto;  
         width: 100%;  
-        box-sizing: border-box;  
+        box-sizing: border-box;
     }
+    
+    .soundwave-animation {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 50px;
+    }
+    
+    .soundwave-bar {
+        width: 5px;
+        height: 20px;
+        margin: 0 3px;
+        background-color: #4CAF50;
+        animation: soundwave 0.7s infinite alternate;
+    }
+    
+    @keyframes soundwave {
+        0% { height: 10px; }
+        100% { height: 40px; }
+    }
+    
+    .soundwave-bar:nth-child(2) { animation-delay: 0.1s; }
+    .soundwave-bar:nth-child(3) { animation-delay: 0.2s; }
+    .soundwave-bar:nth-child(4) { animation-delay: 0.3s; }
+    .soundwave-bar:nth-child(5) { animation-delay: 0.4s; }
     </style>
     """, unsafe_allow_html=True)
+
+# Soundwave animation HTML
+def get_soundwave_html():
+    """
+    Generate HTML for soundwave animation
+    """
+    return """
+    <div class="soundwave-animation">
+        <div class="soundwave-bar"></div>
+        <div class="soundwave-bar"></div>
+        <div class="soundwave-bar"></div>
+        <div class="soundwave-bar"></div>
+        <div class="soundwave-bar"></div>
+    </div>
+    """
 
 class VoiceQABot:
     def __init__(self):
@@ -478,7 +521,7 @@ class VoiceQABot:
         # Initialize models
         try:
             self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
-            self.generation_model = genai.GenerativeModel('gemini-2.0-flash')
+            self.generation_model = genai.GenerativeModel('gemini-1.5-flash')
         except Exception as e:
             st.error(f"Error initializing models: {e}")
             st.stop()
@@ -542,6 +585,9 @@ class VoiceQABot:
             
             # Voice Input 
             if audio_recorder:
+                # Recording state and soundwave placeholders
+                recording_state = st.empty()
+                soundwave_placeholder = st.empty()
                 audio_bytes = audio_recorder.audio_recorder(
                     text="Click to record",
                     recording_color="#e8b62c",
@@ -552,7 +598,11 @@ class VoiceQABot:
                 
                 # Process audio if recorded
                 if audio_bytes:
-                    self._handle_audio_input(audio_bytes)
+                    # Show soundwave during processing
+                    soundwave_placeholder.markdown(get_soundwave_html(), unsafe_allow_html=True)
+                    
+                    # Process input
+                    self._handle_audio_input(audio_bytes, recording_state, soundwave_placeholder)
             else:
                 st.warning("Audio recording not available. Please install audio-recorder-streamlit.")
             
@@ -561,13 +611,16 @@ class VoiceQABot:
             conversation_container = st.container()
             with conversation_container:
                 st.markdown('<div class="conversation-history">', unsafe_allow_html=True)
-                for entry in st.session_state.conversation_history:
+                
+                # Reverse the conversation history to show latest first
+                for entry in reversed(st.session_state.conversation_history):
                     st.markdown(f"**Q:** {entry['query']}")
                     st.markdown(f"**A:** {entry['response']}")
                     st.markdown("---")
+                
                 st.markdown('</div>', unsafe_allow_html=True)
 
-    def _handle_audio_input(self, audio_bytes):
+    def _handle_audio_input(self, audio_bytes, recording_state, soundwave_placeholder):
         """
         Handle audio input processing with comprehensive error handling
         """
@@ -587,7 +640,12 @@ class VoiceQABot:
             os.unlink(temp_audio_path)
 
             if not query:
-                st.warning("No speech detected. Please try again.")
+                # Convert error to speech
+                error_response = "Sorry, I couldn't understand the audio. Please try again."
+                audio_file = self._text_to_speech(error_response)
+                st.audio(audio_file, format='audio/mp3')
+                os.unlink(audio_file)
+                soundwave_placeholder.empty()
                 return
 
             # Process query
@@ -595,27 +653,42 @@ class VoiceQABot:
             response = self._generate_response(query, context)
 
             # Update conversation history
-            st.session_state.conversation_history.append({
+            st.session_state.conversation_history.insert(0, {
                 'query': query,
                 'response': response
             })
 
-            # Generate and play audio response
+            # Generate and auto-play audio response
             audio_file = self._text_to_speech(response)
-            
-            # Display audio for playback
-            with open(audio_file, 'rb') as audio_file_obj:
-                st.audio(audio_file_obj, format='audio/mp3')
+            st.audio(audio_file, format='audio/mp3', start_time=0)
             
             # Clean up audio file
             os.unlink(audio_file)
+            
+            # Clear soundwave
+            soundwave_placeholder.empty()
 
         except sr.UnknownValueError:
-            st.error("Sorry, I couldn't understand the audio. Please try again.")
+            # Convert error to speech
+            error_response = "Sorry, I couldn't understand the audio. Please try again."
+            audio_file = self._text_to_speech(error_response)
+            st.audio(audio_file, format='audio/mp3')
+            os.unlink(audio_file)
+            soundwave_placeholder.empty()
         except sr.RequestError:
-            st.error("Could not request results from speech recognition service.")
+            # Convert error to speech
+            error_response = "Could not request results from speech recognition service. Please try again."
+            audio_file = self._text_to_speech(error_response)
+            st.audio(audio_file, format='audio/mp3')
+            os.unlink(audio_file)
+            soundwave_placeholder.empty()
         except Exception as e:
-            st.error(f"An unexpected error occurred: {e}")
+            # Convert error to speech
+            error_response = f"An unexpected error occurred: {str(e)}. Please try again."
+            audio_file = self._text_to_speech(error_response)
+            st.audio(audio_file, format='audio/mp3')
+            os.unlink(audio_file)
+            soundwave_placeholder.empty()
 
     def _extract_text_from_pdf(self):
         """
