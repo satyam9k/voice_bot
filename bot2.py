@@ -532,7 +532,7 @@ class VoiceQABot:
             # Create embeddings
             with st.spinner(f"Creating embeddings for {len(chunks)} text chunks..."):
                  embeddings = self.embedding_model.encode(chunks, show_progress_bar=False) # Disable bar in spinner
-            st.info("Embeddings created successfully.")
+            #st.info("Embeddings created successfully.")
             return chunks, np.array(embeddings) # Ensure embeddings are numpy array
         except Exception as e:
             st.error(f"Failed to create text embeddings: {e}")
