@@ -176,17 +176,7 @@ def apply_custom_styling():
     .soundwave-bar:nth-child(5) { animation-delay: 0s; } /* Symmetric delay */
     </style>
     """, unsafe_allow_html=True)
-st.markdown(
-    """
-    <style>
-        div[data-testid="stAudio"] {
-            background-color: transparent !important;  /* Removes dark background */
-            border-radius: 10px;  /* Optional: Smooth edges */
-        }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
+
 def get_soundwave_html(label="Processing..."):
     """Generate HTML for soundwave animation with a label"""
     return f"""
