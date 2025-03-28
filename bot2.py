@@ -10,11 +10,11 @@ import tempfile
 import base64
 import speech_recognition as sr
 import time
-import io # Needed for base64 encoding of audio
+import io 
 
-# Avoid import issues
+
 try:
-    # Note: audio_recorder_streamlit may need to be installed via pip
+
     from audio_recorder_streamlit import audio_recorder
 except ImportError:
     st.error("Please install audio-recorder-streamlit: pip install audio-recorder-streamlit")
@@ -24,7 +24,7 @@ except ImportError:
 from dotenv import load_dotenv
 load_dotenv()
 
-# Disable PyTorch logging to reduce noise
+
 import logging
 logging.getLogger('torch').setLevel(logging.ERROR)
 
@@ -35,10 +35,10 @@ STATE_PROCESSING = "processing"
 STATE_SPEAKING = "speaking"
 
 # --- Color Definitions ---
-COLOR_IDLE = "#CCCCCC" # Grey for idle
-COLOR_LISTENING = "#FF4B4B" # Red for listening/recording
-COLOR_PROCESSING = "#FFA500" # Orange for thinking
-COLOR_SPEAKING = "#4CAF50" # Green for speaking
+COLOR_IDLE = "#CCCCCC"
+COLOR_LISTENING = "#FF4B4B" 
+COLOR_PROCESSING = "#FFA500" 
+COLOR_SPEAKING = "#4CAF50"
 
 # --- Helper Functions ---
 
@@ -65,9 +65,7 @@ def get_audio_base64(audio_file_path):
 
 def autoplay_audio_html(base64_audio_string, format="mp3"):
     """Generate HTML for auto-playing audio WITHOUT visible controls"""
-    # Browsers often restrict autoplay without user interaction.
-    # Recording audio *is* interaction, so this should usually work.
-    # Removed 'controls' attribute
+
     return f"""
     <audio autoplay style="width: 100%; display: none;"> <!-- Hidden -->
         <source src="data:audio/{format};base64,{base64_audio_string}" type="audio/{format}">
@@ -179,9 +177,7 @@ def apply_custom_styling():
     .soundwave-bar:nth-child(4) {{ animation-delay: 0.15s; }} /* Symmetric delay */
     .soundwave-bar:nth-child(5) {{ animation-delay: 0s; }} /* Symmetric delay */
 
-    /* --- Style for the Microphone Button --- */
-    /* Attempt to target the button within the audio recorder component */
-    /* This selector might need adjustment based on the component's HTML structure */
+
     div[data-testid="stAudioRecorder"] > div > button {{
         background-color: transparent !important;
         border: none !important;
@@ -198,12 +194,12 @@ def apply_custom_styling():
 
 def get_soundwave_html(color="#42bd59", label=""):
     """Generate HTML for soundwave animation with dynamic color and optional label"""
-    # Generate 5 bars with the specified background color via inline style
+
     bars_html = "".join([
         f'<div class="soundwave-bar" style="background-color: {color};"></div>'
         for _ in range(5)
     ])
-    label_html = f'<p style="text-align: center; color: #555; font-size: 0.9em; height: 1.2em;">{label}</p>' if label else '<p style="height: 1.2em;"></p>' # Reserve space even if no label
+    label_html = f'<p style="text-align: center; color: #555; font-size: 0.9em; height: 1.2em;">{label}</p>' if label else '<p style="height: 1.2em;"></p>' 
 
     return f"""
     <div class="soundwave-container">
@@ -216,20 +212,20 @@ def get_soundwave_html(color="#42bd59", label=""):
 
 class VoiceQABot:
     def __init__(self):
-        # Configuration and error handling for API key
+
         self.GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
         if not self.GEMINI_API_KEY:
             st.error("GEMINI_API_KEY not found in .env file. Please set it.")
             st.stop()
 
-        # Configure Gemini API
+
         genai.configure(api_key=self.GEMINI_API_KEY)
 
-        # PDF and Profile Picture paths
+
         self.pdf_path = os.getenv("PDF_PATH", "aboutme.pdf")
         self.profile_pic_path = os.getenv("PROFILE_PIC_PATH", "sk.jpeg")
 
-        # Profile Picture
+
         try:
             self.profile_pic_base64 = get_base64_of_file(self.profile_pic_path)
             self.profile_pic_html = f'<img src="data:image/jpeg;base64,{self.profile_pic_base64}" class="circular-img" alt="My Picture">'
@@ -237,18 +233,16 @@ class VoiceQABot:
             st.warning(f"Could not load profile picture: {e}")
             self.profile_pic_html = '<p style="text-align:center; color: red;">Profile picture not found.</p>'
 
-        # Initialize conversation history (newest first)
+
         if 'conversation_history' not in st.session_state:
             st.session_state.conversation_history = []
 
-        # Initialize application state
         if 'app_state' not in st.session_state:
             st.session_state.app_state = STATE_IDLE
         if 'status_message' not in st.session_state:
-            st.session_state.status_message = "" # To show text like "Listening..."
+            st.session_state.status_message = "" 
 
 
-        # Initialize models
         try:
             self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
             self.generation_model = genai.GenerativeModel('gemini-2.0-flash')
@@ -256,24 +250,22 @@ class VoiceQABot:
             st.error(f"Error initializing AI models: {e}")
             st.stop()
 
-        # Load document text and embeddings
         self._load_document_embeddings()
 
     def _load_document_embeddings(self):
         """Load document text and create embeddings with error handling"""
         try:
-            # Ensure document text is loaded
+
             if 'document_text' not in st.session_state:
                 st.session_state.document_text = self._extract_text_from_pdf()
 
-            # Create embeddings if not already done
             if 'document_embeddings' not in st.session_state or not st.session_state.document_text:
                 if st.session_state.document_text:
                     st.session_state.document_embeddings = self._create_document_embeddings(
                         st.session_state.document_text
                     )
                 else:
-                    # Handle case where PDF text couldn't be loaded
+    
                     st.session_state.document_embeddings = ([], [])
                     st.warning("Could not load document text, context retrieval will be limited.")
 
@@ -286,18 +278,16 @@ class VoiceQABot:
         """Helper to update state and message, triggering a rerun."""
         st.session_state.app_state = state
         st.session_state.status_message = message
-        # No explicit rerun needed, Streamlit handles it when session_state changes
+       
 
     def display_ui(self):
         """Display the custom UI with profile and interaction components"""
         apply_custom_styling()
 
-        # st.markdown("<h1 style='color: #FF5733;'>AI Voice Assistant</h1>",
-        #             unsafe_allow_html=True)
-        # st.markdown("---")
+
 
         # Create two columns
-        left_col, right_col = st.columns([1, 1.2]) # Give right col slightly more space
+        left_col, right_col = st.columns([1, 1.2]) 
 
         # Left column - Profile and Bio
         with left_col:
@@ -321,7 +311,6 @@ class VoiceQABot:
             st.markdown("## Talk to me!")
             st.markdown("Click the microphone, ask a question, and I'll respond.")
 
-            # Determine soundwave color and label based on current state
             current_state = st.session_state.get('app_state', STATE_IDLE)
             current_message = st.session_state.get('status_message', "")
             if current_state == STATE_LISTENING:
@@ -330,41 +319,36 @@ class VoiceQABot:
                 soundwave_color = COLOR_PROCESSING
             elif current_state == STATE_SPEAKING:
                 soundwave_color = COLOR_SPEAKING
-            else: # IDLE
+            else: 
                 soundwave_color = COLOR_IDLE
 
-            # Display the soundwave *always*
             soundwave_placeholder = st.empty()
             soundwave_placeholder.markdown(
-                get_soundwave_html(color=soundwave_color, label=current_message),
+                get_soundwave_html(color="#42bd59", label=current_message),
                 unsafe_allow_html=True
             )
 
-            # Placeholder for the hidden audio player
+
             audio_output_placeholder = st.empty()
 
-            # Voice Input Component
             if audio_recorder:
-                # The icon colors are controlled by the component's parameters
+    
                 audio_bytes = audio_recorder(
-                    recording_color=COLOR_LISTENING, # Red icon when recording
-                    neutral_color=COLOR_SPEAKING,    # Green icon when idle
+                    recording_color=COLOR_LISTENING, 
+                    neutral_color=COLOR_SPEAKING,  
                     icon_name="microphone",
                     icon_size="2x",
-                    pause_threshold=2.0, # Seconds of silence before stopping
-                    sample_rate=16000, # Common sample rate
-                    key="audio_input" # Add a key for stability
+                    pause_threshold=2.0, 
+                    sample_rate=16000, 
+                    key="audio_input"
                 )
 
-                # Process audio *only if* new audio bytes are received
                 if audio_bytes:
-                    # Immediately update state to listening WHILE recording is happening
-                    # (Note: audio_recorder blocks until recording finishes)
-                    # So, we set the state *after* it returns bytes
-                    self._set_state(STATE_LISTENING, "Processing audio...") # Show listening color briefly after recording stops
-                    # Process input (includes state changes for processing/speaking)
+        
+                    self._set_state(STATE_LISTENING, "Processing audio...") 
+  
                     self._handle_audio_input(audio_bytes, audio_output_placeholder)
-                    # State will be set back to idle in _handle_audio_input's finally block
+  
 
             else:
                 st.warning("Audio recording functionality requires the 'audio-recorder-streamlit' library.")
@@ -386,12 +370,12 @@ class VoiceQABot:
 
     def _handle_audio_input(self, audio_bytes, audio_output_placeholder):
         """Handle audio input processing, response generation, and audio output"""
-        temp_audio_path = None # Initialize to ensure cleanup check works
+        temp_audio_path = None 
         bot_audio_path = None
 
         try:
             # 1. Save recorded audio temporarily
-            # (State is already LISTENING briefly)
+
             with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_audio:
                 temp_audio.write(audio_bytes)
                 temp_audio_path = temp_audio.name
@@ -402,12 +386,11 @@ class VoiceQABot:
             # 2. Transcribe audio
             recognizer = sr.Recognizer()
             with sr.AudioFile(temp_audio_path) as source:
-                # recognizer.adjust_for_ambient_noise(source, duration=0.5) # Optional
+
                 audio = recognizer.record(source)
 
-            # Use recognize_google - ensure internet connection
             query = recognizer.recognize_google(audio)
-            # st.write(f"Heard: {query}") # For debugging - remove in production
+
 
             if not query:
                 raise ValueError("Transcription resulted in empty text.")
@@ -417,13 +400,12 @@ class VoiceQABot:
             context = self._retrieve_relevant_context(query)
             response = self._generate_response(query, context)
 
-            # 4. Update conversation history (insert at the beginning)
+            # 4. Update conversation history
             st.session_state.conversation_history.insert(0, {
                 'query': query,
                 'response': response
             })
-            # Force immediate UI update for history
-            # st.experimental_rerun() # Usually not needed if state changes handle it
+
 
             # 5. Generate bot's audio response
             self._set_state(STATE_SPEAKING, "Speaking...")
@@ -440,9 +422,7 @@ class VoiceQABot:
             audio_html = autoplay_audio_html(audio_base64)
             audio_output_placeholder.markdown(audio_html, unsafe_allow_html=True)
 
-            # 8. Keep "Speaking..." state until audio likely finishes?
-            #    This is tricky. We'll reset to idle in finally.
-            #    A more complex solution could use JS events, but let's keep it simple.
+
 
         except sr.UnknownValueError:
             error_msg = "Sorry, I couldn't understand the audio. Please try speaking clearly."
@@ -452,16 +432,16 @@ class VoiceQABot:
             error_msg = f"Could not connect to speech recognition service: {e}. Check internet connection."
             st.error(error_msg)
             self._play_error_message(error_msg, audio_output_placeholder)
-        except ValueError as ve: # Catch specific value errors (empty transcription, TTS fail)
+        except ValueError as ve: 
              error_msg = f"Processing error: {ve}. Please try again."
              st.error(error_msg)
              self._play_error_message(error_msg, audio_output_placeholder)
         except Exception as e:
             error_msg = f"An unexpected error occurred: {str(e)}. Please try again."
-            st.exception(e) # Log the full traceback for debugging
+            st.exception(e) 
             self._play_error_message(error_msg, audio_output_placeholder)
         finally:
-            # Clean up temporary files
+   
             if temp_audio_path and os.path.exists(temp_audio_path):
                 try: os.unlink(temp_audio_path)
                 except Exception as e_unlink: st.warning(f"Could not delete temp user audio file: {e_unlink}")
@@ -469,9 +449,7 @@ class VoiceQABot:
                 try: os.unlink(bot_audio_path)
                 except Exception as e_unlink: st.warning(f"Could not delete temp bot audio file: {e_unlink}")
 
-            # Reset state to Idle after processing (or error handling) is complete
-            # Add a small delay perhaps, otherwise the 'Speaking' state vanishes instantly
-            # time.sleep(1) # Optional small delay
+     
             self._set_state(STATE_IDLE, "")
 
 
@@ -479,21 +457,19 @@ class VoiceQABot:
         """Generates and plays an audio message for errors."""
         bot_audio_path = None
         try:
-            self._set_state(STATE_SPEAKING, "Error occurred...") # Use speaking state/color for error audio
+            self._set_state(STATE_SPEAKING, "Error occurred...") 
             bot_audio_path = self._text_to_speech(error_text)
             if bot_audio_path:
                 audio_base64 = get_audio_base64(bot_audio_path)
                 if audio_base64:
                     audio_html = autoplay_audio_html(audio_base64)
                     audio_output_placeholder.markdown(audio_html, unsafe_allow_html=True)
-            # State reset happens in the calling function's finally block
         except Exception as e:
-            st.error(f"Failed to play error message audio: {e}") # Fallback to text error
+            st.error(f"Failed to play error message audio: {e}")
         finally:
             if bot_audio_path and os.path.exists(bot_audio_path):
                 try: os.unlink(bot_audio_path)
                 except Exception as e_unlink: st.warning(f"Could not delete temp error audio file: {e_unlink}")
-            # DO NOT reset state here, let the caller's finally block handle it.
 
 
     def _extract_text_from_pdf(self):
@@ -512,11 +488,11 @@ class VoiceQABot:
                 for page_num, page in enumerate(pdf_reader.pages):
                     try:
                         page_text = page.extract_text()
-                        if page_text: # Check if text extraction returned something
-                           text += page_text + "\n" # Add newline between pages
+                        if page_text:
+                           text += page_text + "\n" 
                     except Exception as page_e:
                         st.warning(f"Could not extract text from page {page_num + 1} of PDF: {page_e}")
-            return text.strip() # Remove leading/trailing whitespace
+            return text.strip() 
         except Exception as e:
             st.error(f"Error reading PDF '{self.pdf_path}': {e}")
             return ""
@@ -529,11 +505,10 @@ class VoiceQABot:
             return [], []
 
         try:
-            # Create embeddings
             with st.spinner(f"Creating embeddings for {len(chunks)} text chunks..."):
-                 embeddings = self.embedding_model.encode(chunks, show_progress_bar=False) # Disable bar in spinner
+                 embeddings = self.embedding_model.encode(chunks, show_progress_bar=False) 
             #st.info("Embeddings created successfully.")
-            return chunks, np.array(embeddings) # Ensure embeddings are numpy array
+            return chunks, np.array(embeddings) 
         except Exception as e:
             st.error(f"Failed to create text embeddings: {e}")
             return [], []
@@ -546,7 +521,7 @@ class VoiceQABot:
 
             if not chunks or not isinstance(embeddings, np.ndarray) or embeddings.shape[0] == 0:
                  st.warning("No document embeddings available for context retrieval.")
-                 return "No background context is available." # Return neutral message
+                 return "No background context is available." 
 
             query_embedding = self.embedding_model.encode([query])[0]
             similarities = cosine_similarity([query_embedding], embeddings)[0]
